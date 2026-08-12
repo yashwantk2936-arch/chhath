@@ -20,10 +20,7 @@
             flex-direction: column;
             overflow: hidden;
             background-color: #0c0c0c;
-            
-            /* Updated to use the Raw GitHub URL */
             background-image: url('https://raw.githubusercontent.com/yashwantk2936-arch/chhath/main/ChatGPT%20Image%20Aug%2012%2C%202026%2C%2002_27_21%20PM.png');
-            
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
@@ -31,7 +28,6 @@
             color: #fff;
         }
 
-        /* Aesthetic Dark Gradient Overlay */
         .overlay {
             position: absolute;
             inset: 0;
@@ -39,7 +35,6 @@
             z-index: -1;
         }
 
-        /* Top Corner Action: Change Background */
         .corner-action {
             position: absolute;
             top: 25px;
@@ -79,7 +74,6 @@
             fill: none;
         }
 
-        /* Top Section: Title & Song Selection */
         .header-section {
             width: 100%;
             text-align: center;
@@ -91,7 +85,7 @@
             font-family: 'Yatra One', cursive; 
             font-size: 5.5rem;
             margin-bottom: 0;
-            color: #fcebbb; /* Soft aesthetic gold */
+            color: #fcebbb;
             text-shadow: 0 4px 20px rgba(0,0,0,0.6);
             letter-spacing: 2px;
             font-weight: normal;
@@ -105,7 +99,6 @@
             text-transform: uppercase;
         }
 
-        /* Preloaded Songs & Upload Options */
         .playlist-container {
             display: flex;
             flex-wrap: wrap;
@@ -143,12 +136,10 @@
             color: #fcebbb;
         }
 
-        /* Hide Default File Inputs */
         input[type="file"] {
             display: none;
         }
 
-        /* Floating Bottom Bar (Highly Transparent) */
         .bottom-bar {
             position: fixed;
             bottom: 40px;
@@ -170,7 +161,6 @@
             gap: 18px;
         }
 
-        /* Track Info */
         .track-info {
             text-align: center;
             font-size: 1.1rem;
@@ -182,7 +172,6 @@
             letter-spacing: 0.5px;
         }
 
-        /* Progress Area */
         .progress-area {
             display: flex;
             align-items: center;
@@ -216,7 +205,6 @@
             transform: scale(1.3);
         }
 
-        /* Controls Area */
         .controls-area {
             display: flex;
             justify-content: space-between;
@@ -272,7 +260,6 @@
             transform: scale(1.05);
         }
 
-        /* Volume Controls */
         .volume-area {
             display: flex;
             align-items: center;
@@ -332,16 +319,16 @@
             </div>
 
             <!-- Divider/Separator in flex -->
-            <div style="width: 100%; height: 5px;"></div>
+            <div id="upload-divider" style="width: 100%; height: 5px;"></div>
 
             <!-- Upload Custom Song -->
             <label for="audio-upload" class="song-chip" style="border-style: dashed;">
                 <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                Upload Audio
+                Upload & Add Song
             </label>
             <input type="file" id="audio-upload" accept="audio/*">
             
-        </div> <!-- ALL CHIPS ARE NOW PROPERLY INSIDE THIS CONTAINER -->
+        </div>
     </div>
 
     <audio id="audio-player"></audio>
@@ -394,7 +381,7 @@
         const audio = document.getElementById('audio-player');
         const audioUpload = document.getElementById('audio-upload');
         const bgUpload = document.getElementById('bg-upload');
-        const songChips = document.querySelectorAll('.song-chip[data-src]');
+        const playlistContainer = document.getElementById('playlist-container');
         
         // UI Elements
         const trackName = document.getElementById('track-name');
@@ -406,7 +393,12 @@
         const volumeBar = document.getElementById('volume-bar');
 
         let currentSongIndex = -1;
-        let isCustomAudio = false;
+        let activeSongsArray = [];
+
+        // Update the list of playable songs whenever a new one is added
+        const refreshSongList = () => {
+            activeSongsArray = Array.from(document.querySelectorAll('.song-chip[data-src]'));
+        };
 
         const formatTime = (time) => {
             if (isNaN(time)) return "0:00";
@@ -428,18 +420,18 @@
         };
 
         const setActiveChip = (index) => {
-            songChips.forEach((chip, i) => {
+            activeSongsArray.forEach((chip, i) => {
                 if (i === index) chip.classList.add('active');
                 else chip.classList.remove('active');
             });
         };
 
         const playSong = (index) => {
-            if (index < 0 || index >= songChips.length) return;
+            refreshSongList();
+            if (index < 0 || index >= activeSongsArray.length) return;
             currentSongIndex = index;
-            isCustomAudio = false;
             
-            const chip = songChips[index];
+            const chip = activeSongsArray[index];
             audio.src = chip.getAttribute('data-src');
             trackName.textContent = chip.textContent.trim();
             
@@ -447,49 +439,86 @@
             updatePlayState(true);
         };
 
-        // Check if audio fails to load from the GitHub URL
-        audio.addEventListener('error', () => {
-            alert("This song could not be loaded. The GitHub raw link might be broken or the file is too large for GitHub to stream directly.");
-            updatePlayState(false);
-            trackName.textContent = "Error: Link Broken or File Too Large";
+        // NEW: Upload & Save Custom Audio as a New Chip
+        audioUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                // Ask user to name the song (removes the file extension from default name)
+                let defaultName = file.name.replace(/\.[^/.]+$/, "");
+                let songTitle = prompt("What do you want to name this song?", defaultName);
+                
+                // If they click cancel or leave it blank, give it a default name
+                if (!songTitle) songTitle = "New Uploaded Song";
+
+                // Create local temporary URL
+                const audioUrl = URL.createObjectURL(file);
+                
+                // Build the new HTML element
+                const newChip = document.createElement('div');
+                newChip.className = 'song-chip';
+                newChip.setAttribute('data-src', audioUrl);
+                newChip.innerHTML = `
+                    <svg class="icon" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+                    ${songTitle}
+                `;
+
+                // Add the new button right before the "Upload" section divider
+                const divider = document.getElementById('upload-divider');
+                playlistContainer.insertBefore(newChip, divider);
+
+                // Refresh the list and automatically play the new song
+                refreshSongList();
+                const newIndex = activeSongsArray.indexOf(newChip);
+                playSong(newIndex);
+                
+                // Clear the file input so they can upload the same file again if needed
+                e.target.value = '';
+            }
         });
 
-        // Click Preloaded Songs
-        songChips.forEach((chip, index) => {
-            chip.addEventListener('click', () => {
+        // Use event delegation to handle clicks on dynamically added songs
+        playlistContainer.addEventListener('click', (e) => {
+            const clickedChip = e.target.closest('.song-chip[data-src]');
+            if (clickedChip) {
+                refreshSongList();
+                const index = activeSongsArray.indexOf(clickedChip);
                 playSong(index);
-            });
+            }
         });
 
-        // Play/Pause Button
+        audio.addEventListener('error', () => {
+            alert("This song could not be loaded.");
+            updatePlayState(false);
+            trackName.textContent = "Error: File Unavailable";
+        });
+
+        // Controls
         document.getElementById('play-pause-btn').addEventListener('click', () => {
             if (!audio.src) return;
             updatePlayState(audio.paused);
         });
 
-        // Forward & Rewind
         document.getElementById('forward-btn').addEventListener('click', () => { audio.currentTime += 10; });
         document.getElementById('rewind-btn').addEventListener('click', () => { audio.currentTime -= 10; });
 
-        // Next & Prev
         document.getElementById('next-btn').addEventListener('click', () => {
-            if (isCustomAudio) return;
+            refreshSongList();
+            if(activeSongsArray.length === 0) return;
             let nextIndex = currentSongIndex + 1;
-            if (nextIndex >= songChips.length) nextIndex = 0;
+            if (nextIndex >= activeSongsArray.length) nextIndex = 0;
             playSong(nextIndex);
         });
         
         document.getElementById('prev-btn').addEventListener('click', () => {
-            if (isCustomAudio) return;
+            refreshSongList();
+            if(activeSongsArray.length === 0) return;
             let prevIndex = currentSongIndex - 1;
-            if (prevIndex < 0) prevIndex = songChips.length - 1;
+            if (prevIndex < 0) prevIndex = activeSongsArray.length - 1;
             playSong(prevIndex);
         });
 
-        // Volume
         volumeBar.addEventListener('input', (e) => { audio.volume = e.target.value; });
 
-        // Progress Bar Update
         audio.addEventListener('timeupdate', () => {
             if (audio.duration) {
                 progressBar.value = (audio.currentTime / audio.duration) * 100;
@@ -506,7 +535,8 @@
         });
 
         audio.addEventListener('ended', () => {
-            if (!isCustomAudio && songChips.length > 0) {
+            refreshSongList();
+            if (activeSongsArray.length > 0) {
                 document.getElementById('next-btn').click();
             } else {
                 updatePlayState(false);
@@ -515,27 +545,15 @@
             }
         });
 
-        // Upload Custom Audio
-        audioUpload.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                isCustomAudio = true;
-                currentSongIndex = -1;
-                setActiveChip(-1); // Remove active state from chips
-                
-                audio.src = URL.createObjectURL(file);
-                trackName.textContent = file.name;
-                updatePlayState(true);
-            }
-        });
-
-        // Upload Background
         bgUpload.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
                 document.body.style.backgroundImage = `url('${URL.createObjectURL(file)}')`;
             }
         });
+        
+        // Initialize song list on page load
+        refreshSongList();
     </script>
 </body>
 </html>
