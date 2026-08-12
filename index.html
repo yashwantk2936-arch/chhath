@@ -136,6 +136,27 @@
             color: #fcebbb;
         }
 
+        /* Delete Button Styles */
+        .delete-btn {
+            background: rgba(255, 50, 50, 0.3);
+            color: #fff;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            margin-left: 5px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .delete-btn:hover {
+            background: rgba(255, 50, 50, 0.9);
+            transform: scale(1.1);
+        }
+
         input[type="file"] {
             display: none;
         }
@@ -284,10 +305,8 @@
 </head>
 <body>
 
-    <!-- Background Overlay -->
     <div class="overlay"></div>
 
-    <!-- Top Right Corner: Background Upload -->
     <div class="corner-action">
         <label for="bg-upload" class="action-btn">
             <svg class="icon" viewBox="0 0 24 24">
@@ -300,53 +319,48 @@
         <input type="file" id="bg-upload" accept="image/*">
     </div>
 
-    <!-- Header & Song Selection -->
     <div class="header-section">
         <h1>छठ गीत</h1>
         <p class="subtitle">Devotional Chhath Vibes</p>
 
         <div class="playlist-container" id="playlist-container">
-            <!-- Preloaded Songs -->
-            
+            <!-- Preloaded GitHub Songs -->
             <div class="song-chip" data-src="https://raw.githubusercontent.com/yashwantk2936-arch/chhath/main/BEST%20OF%20ANURADHA%20PAUDWAL%20%26%20KAVITA%20PAUDWAL%20CHHATH%20SONGS%20(chhat%20song%20)_compressed_compressed_compressed%20(2).mp3">
                 <svg class="icon" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
-                Anuradha Paudwal Chhath Geet
+                Anuradha Paudwal
             </div>
             
             <div class="song-chip" data-src="https://raw.githubusercontent.com/yashwantk2936-arch/chhath/main/CHHATHI%20MAIYA%20BEST%20OF%20SHARDA%20SINHA%20CHHATH%20SONGS%20VIDEO%20JUKEBOX%20T-Series%20Hamaar%20Bhojpuri_compressed.mp3">
                 <svg class="icon" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
-                Sharda Sinha Chhath Geet
+                Sharda Sinha
             </div>
 
-            <!-- Divider/Separator in flex -->
+            <!-- Custom Uploaded Songs Will Be Injected Here -->
+            <div id="custom-songs-container" style="display: contents;"></div>
+
             <div id="upload-divider" style="width: 100%; height: 5px;"></div>
 
             <!-- Upload Custom Song -->
             <label for="audio-upload" class="song-chip" style="border-style: dashed;">
                 <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                Upload & Add Song
+                Upload & Save Song
             </label>
             <input type="file" id="audio-upload" accept="audio/*">
-            
         </div>
     </div>
 
     <audio id="audio-player"></audio>
 
-    <!-- Transparent Bottom Player Bar -->
     <div class="bottom-bar">
         <div class="track-info" id="track-name">Select a track to begin</div>
         
-        <!-- Progress -->
         <div class="progress-area">
             <span id="current-time">0:00</span>
             <input type="range" id="progress-bar" value="0" min="0" max="100">
             <span id="duration-time">0:00</span>
         </div>
 
-        <!-- Controls -->
         <div class="controls-area">
-            <!-- Spacer for centering main controls -->
             <div style="width: 120px;"></div> 
 
             <div class="main-controls">
@@ -368,7 +382,6 @@
                 </button>
             </div>
 
-            <!-- Volume -->
             <div class="volume-area">
                 <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
                 <input type="range" id="volume-bar" value="1" min="0" max="1" step="0.01">
@@ -376,12 +389,13 @@
         </div>
     </div>
 
-    <!-- Script Logic -->
+    <!-- Script Logic with IndexedDB Database Built-in -->
     <script>
         const audio = document.getElementById('audio-player');
         const audioUpload = document.getElementById('audio-upload');
         const bgUpload = document.getElementById('bg-upload');
         const playlistContainer = document.getElementById('playlist-container');
+        const customSongsContainer = document.getElementById('custom-songs-container');
         
         // UI Elements
         const trackName = document.getElementById('track-name');
@@ -394,8 +408,96 @@
 
         let currentSongIndex = -1;
         let activeSongsArray = [];
+        let db;
 
-        // Update the list of playable songs whenever a new one is added
+        // --- DATABASE SETUP (IndexedDB) ---
+        const dbRequest = indexedDB.open("ChhathSongsDB", 1);
+        
+        dbRequest.onupgradeneeded = (event) => {
+            db = event.target.result;
+            // Create a table called 'songs'
+            if (!db.objectStoreNames.contains("songs")) {
+                db.createObjectStore("songs", { keyPath: "id", autoIncrement: true });
+            }
+        };
+
+        dbRequest.onsuccess = (event) => {
+            db = event.target.result;
+            loadSavedSongs(); // Load songs from database on startup
+        };
+
+        dbRequest.onerror = (event) => {
+            console.error("Database error: ", event.target.errorCode);
+        };
+
+        // --- DATABASE FUNCTIONS ---
+
+        // 1. Load songs from DB
+        function loadSavedSongs() {
+            customSongsContainer.innerHTML = ''; // Clear container
+            const transaction = db.transaction(["songs"], "readonly");
+            const store = transaction.objectStore("songs");
+            const request = store.openCursor();
+
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    const songData = cursor.value;
+                    const audioUrl = URL.createObjectURL(songData.fileBlob);
+                    
+                    // Create HTML element for saved song
+                    const newChip = document.createElement('div');
+                    newChip.className = 'song-chip';
+                    newChip.setAttribute('data-src', audioUrl);
+                    newChip.setAttribute('data-id', songData.id); // Save DB ID to delete it later
+                    newChip.innerHTML = `
+                        <svg class="icon" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+                        ${songData.title}
+                        <div class="delete-btn" title="Delete Song">✕</div>
+                    `;
+                    customSongsContainer.appendChild(newChip);
+                    cursor.continue();
+                } else {
+                    refreshSongList(); // Update playlist array when finished
+                }
+            };
+        }
+
+        // 2. Save song to DB
+        function saveSongToDB(fileBlob, title) {
+            const transaction = db.transaction(["songs"], "readwrite");
+            const store = transaction.objectStore("songs");
+            store.add({ title: title, fileBlob: fileBlob });
+            
+            transaction.oncomplete = () => {
+                loadSavedSongs(); // Reload UI
+            };
+        }
+
+        // 3. Delete song from DB
+        function deleteSongFromDB(id) {
+            if(confirm("Are you sure you want to permanently delete this song?")) {
+                const transaction = db.transaction(["songs"], "readwrite");
+                const store = transaction.objectStore("songs");
+                store.delete(Number(id));
+                
+                transaction.oncomplete = () => {
+                    // Stop playing if the deleted song was currently playing
+                    if(audio.src && document.querySelector(`.song-chip[data-id="${id}"]`).classList.contains('active')) {
+                        audio.pause();
+                        audio.src = '';
+                        trackName.textContent = "Select a track to begin";
+                        playIcon.style.display = 'block';
+                        pauseIcon.style.display = 'none';
+                    }
+                    loadSavedSongs(); // Reload UI
+                };
+            }
+        }
+
+
+        // --- UI & PLAYER LOGIC ---
+
         const refreshSongList = () => {
             activeSongsArray = Array.from(document.querySelectorAll('.song-chip[data-src]'));
         };
@@ -433,51 +535,42 @@
             
             const chip = activeSongsArray[index];
             audio.src = chip.getAttribute('data-src');
-            trackName.textContent = chip.textContent.trim();
+            
+            // Clean up text content to remove the 'X' text from the title
+            let cleanTitle = chip.textContent.replace('✕', '').trim();
+            trackName.textContent = cleanTitle;
             
             setActiveChip(index);
             updatePlayState(true);
         };
 
-        // NEW: Upload & Save Custom Audio as a New Chip
+        // Upload Event
         audioUpload.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
-                // Ask user to name the song (removes the file extension from default name)
                 let defaultName = file.name.replace(/\.[^/.]+$/, "");
                 let songTitle = prompt("What do you want to name this song?", defaultName);
                 
-                // If they click cancel or leave it blank, give it a default name
                 if (!songTitle) songTitle = "New Uploaded Song";
 
-                // Create local temporary URL
-                const audioUrl = URL.createObjectURL(file);
-                
-                // Build the new HTML element
-                const newChip = document.createElement('div');
-                newChip.className = 'song-chip';
-                newChip.setAttribute('data-src', audioUrl);
-                newChip.innerHTML = `
-                    <svg class="icon" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
-                    ${songTitle}
-                `;
-
-                // Add the new button right before the "Upload" section divider
-                const divider = document.getElementById('upload-divider');
-                playlistContainer.insertBefore(newChip, divider);
-
-                // Refresh the list and automatically play the new song
-                refreshSongList();
-                const newIndex = activeSongsArray.indexOf(newChip);
-                playSong(newIndex);
-                
-                // Clear the file input so they can upload the same file again if needed
+                // Save permanently to IndexedDB
+                saveSongToDB(file, songTitle);
                 e.target.value = '';
             }
         });
 
-        // Use event delegation to handle clicks on dynamically added songs
+        // Click Event Delegation (Handles both playing songs and deleting them)
         playlistContainer.addEventListener('click', (e) => {
+            // Check if delete button was clicked
+            if(e.target.classList.contains('delete-btn')) {
+                e.stopPropagation(); // Stop song from playing
+                const chip = e.target.closest('.song-chip');
+                const dbId = chip.getAttribute('data-id');
+                deleteSongFromDB(dbId);
+                return;
+            }
+
+            // Otherwise, play the song
             const clickedChip = e.target.closest('.song-chip[data-src]');
             if (clickedChip) {
                 refreshSongList();
@@ -492,7 +585,7 @@
             trackName.textContent = "Error: File Unavailable";
         });
 
-        // Controls
+        // Player Controls
         document.getElementById('play-pause-btn').addEventListener('click', () => {
             if (!audio.src) return;
             updatePlayState(audio.paused);
@@ -552,7 +645,6 @@
             }
         });
         
-        // Initialize song list on page load
         refreshSongList();
     </script>
 </body>
